@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Reverse Countdown Calendar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            text-align: center;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .input-section {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+        select, input[type="date"], input[type="radio"], input[type="text"] {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
+        #customEvent {
+            display: none; /* Hidden by default */
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        th {
+            background-color: rgb(52, 73, 94);
+            color: white;
+            font-weight: bold;
+        }
+        .week-header {
+            background-color: #e0e0e0 !important;
+            color: #333;
+            font-weight: bold;
+        }
+        .weekend {
+            background-color: rgb(236, 240, 241);
+        }
+        .today {
+            background-color: rgb(39, 174, 96);
+            color: white;
+        }
+        .event {
+            background-color: rgb(231, 76, 60);
+            color: white;
+        }
+        .empty {
+            border: none;
+            background: none;
+        }
+        #error-message {
+            color: red;
+            margin: 10px 0;
+            display: none;
+        }
+        .creator-name {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            font-size: 16px;
+            color: #444;
+            font-weight: bold;
+        }
+        @media print {
+            body {
+                margin: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .container {
+                box-shadow: none;
+                padding: 10px;
+            }
+            .input-section, button, #error-message {
+                display: none;
+            }
+            #calendar {
+                display: table !important;
+            }
+            .creator-name {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+            }
+            h2 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 id="calendar-title">Event Reverse Countdown Calendar</h2>
+        <div class="input-section">
+            <label for="eventType">Event Type: </label>
+            <select id="eventType" onchange="toggleCustomEvent()">
+                <option value="Exam Day">Exam Day</option>
+                <option value="Birthday">Birthday</option>
+                <option value="Anniversary">Anniversary</option>
+                <option value="Project Submission Date">Project Submission Date</option>
+                <option value="Happiness Program">Happiness Program</option>
+                <option value="Custom">Custom</option>
+            </select>
+            <label for="customEvent">Custom Event: </label>
+            <input type="text" id="customEvent" placeholder="Enter custom event">
+            <label for="eventDate">Event Date: </label>
+            <input type="date" id="eventDate" min="2025-09-19">
+            <label for="creatorName">Creator Name: </label>
+            <input type="text" id="creatorName" placeholder="Enter creator name">
+            <label>PDF Orientation: </label>
+            <label><input type="radio" name="orientation" value="portrait" checked> Portrait</label>
+            <label><input type="radio" name="orientation" value="landscape"> Landscape</label>
+            <button onclick="generateCalendar()">Generate Calendar</button>
+        </div>
+        <div id="error-message"></div>
+        <div class="creator-name" id="creatorNameDisplay"></div>
+        <table id="calendar" style="display: none; position: relative;">
+            <thead>
+                <tr>
+                    <th>Sun</th>
+                    <th>Mon</th>
+                    <th>Tue</th>
+                    <th>Wed</th>
+                    <th>Thu</th>
+                    <th>Fri</th>
+                    <th>Sat</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <button onclick="printCalendar()" style="display: none;" id="printButton">Print Calendar</button>
+        <button onclick="downloadPDF()" style="display: none;" id="pdfButton">Download as PDF</button>
+        <button onclick="downloadJPG()" style="display: none;" id="jpgButton">Download as JPG</button>
+    </div>
+
+    <script>
+        const todayDate = new Date('2025-09-19T00:07:00Z'); // 12:07 AM IST
+        const tbody = document.querySelector('#calendar tbody');
+        const calendarTable = document.querySelector('#calendar');
+        const errorMessage = document.querySelector('#error-message');
+        const printButton = document.querySelector('#printButton');
+        const pdfButton = document.querySelector('#pdfButton');
+        const jpgButton = document.querySelector('#jpgButton');
+        const titleElement = document.querySelector('#calendar-title');
+        const eventTypeSelect = document.getElementById('eventType');
+        const customEventInput = document.getElementById('customEvent');
+        const creatorNameInput = document.getElementById('creatorName');
+        const creatorNameDisplay = document.getElementById('creatorNameDisplay');
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            const rgb = hexToRgb(color);
+            const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+            return brightness > 128 ? color : getRandomColor();
+        }
+
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return { r, g, b };
+        }
+
+        function getDangerZoneColor(daysLeft, totalDays) {
+            const percentage = daysLeft / totalDays;
+            if (percentage > 0.66) {
+                return '#2ecc71'; // Green for >66% time remaining
+            } else if (percentage > 0.33) {
+                return '#f1c40f'; // Yellow for 33%-66% time remaining
+            } else {
+                return '#e74c3c'; // Red for <33% time remaining
+            }
+        }
+
+        function toggleCustomEvent() {
+            if (eventTypeSelect.value === 'Custom') {
+                customEventInput.style.display = 'inline-block';
+                customEventInput.focus();
+            } else {
+                customEventInput.style.display = 'none';
+                customEventInput.value = '';
+            }
+        }
+
+        function generateCalendar() {
+            const eventTypeSelectValue = document.getElementById('eventType').value;
+            const customEvent = document.getElementById('customEvent').value.trim();
+            const eventDateInput = document.getElementById('eventDate').value;
+            const creatorName = creatorNameInput.value.trim() || 'Anonymous';
+            errorMessage.style.display = 'none';
+            tbody.innerHTML = '';
+            creatorNameDisplay.textContent = `Created by: ${creatorName}`;
+
+            if (!eventDateInput) {
+                errorMessage.textContent = 'Please select an event date.';
+                errorMessage.style.display = 'block';
+                calendarTable.style.display = 'none';
+                printButton.style.display = 'none';
+                pdfButton.style.display = 'none';
+                jpgButton.style.display = 'none';
+                titleElement.textContent = 'Event Reverse Countdown Calendar';
+                creatorNameDisplay.textContent = '';
+                return;
+            }
+
+            const eventDate = new Date(eventDateInput);
+            if (isNaN(eventDate) || eventDate < todayDate) {
+                errorMessage.textContent = 'Please select a valid future event date.';
+                errorMessage.style.display = 'block';
+                calendarTable.style.display = 'none';
+                printButton.style.display = 'none';
+                pdfButton.style.display = 'none';
+                jpgButton.style.display = 'none';
+                titleElement.textContent = 'Event Reverse Countdown Calendar';
+                creatorNameDisplay.textContent = '';
+                return;
+            }
+
+            const eventType = (eventTypeSelectValue === 'Custom' && customEvent) ? customEvent : eventTypeSelectValue;
+
+            if (eventTypeSelectValue === 'Custom' && !customEvent) {
+                errorMessage.textContent = 'Please enter a custom event.';
+                errorMessage.style.display = 'block';
+                calendarTable.style.display = 'none';
+                printButton.style.display = 'none';
+                pdfButton.style.display = 'none';
+                jpgButton.style.display = 'none';
+                titleElement.textContent = 'Event Reverse Countdown Calendar';
+                creatorNameDisplay.textContent = '';
+                return;
+            }
+
+            const startMonth = todayDate.toLocaleString('default', { month: 'short' });
+            const eventMonth = eventDate.toLocaleString('default', { month: 'short' });
+            titleElement.textContent = `${eventType} Reverse Countdown Calendar: ${startMonth} ${todayDate.getDate()} - ${eventMonth} ${eventDate.getDate()}, 2025`;
+
+            let current = new Date(todayDate);
+            const totalDays = Math.floor((eventDate - todayDate) / (1000 * 60 * 60 * 24)) + 1;
+            const totalWeeks = Math.ceil(totalDays / 7);
+
+            let weekNum = totalWeeks;
+            let weekStart = new Date(todayDate);
+
+            while (current <= eventDate) {
+                const headerTr = document.createElement('tr');
+                const headerTd = document.createElement('td');
+                headerTd.colSpan = 7;
+                headerTd.classList.add('week-header');
+
+                const weekStartDays = Math.floor((eventDate - weekStart) / (1000 * 60 * 60 * 24));
+                let weekEndDays = weekStartDays - 6;
+                if (weekEndDays < 0) weekEndDays = 0;
+
+                headerTd.textContent = `Week ${weekNum}: Days ${weekStartDays}-${weekEndDays}`;
+                headerTr.appendChild(headerTd);
+                tbody.appendChild(headerTr);
+
+                const daysTr = document.createElement('tr');
+                for (let i = 0; i < 7; i++) {
+                    const td = document.createElement('td');
+                    if (current > eventDate) {
+                        td.classList.add('empty');
+                    } else {
+                        const month = current.toLocaleString('default', { month: 'short' });
+                        const day = current.getDate();
+                        const daysLeft = Math.floor((eventDate - current) / (1000 * 60 * 60 * 24));
+                        let content = `<span class="date">${month} ${day}</span><br>`;
+                        if (daysLeft > 0) {
+                            if (eventType.toLowerCase() === 'happiness program') {
+                                const randomColor = getRandomColor();
+                                content += `<b style="color: ${randomColor}">${daysLeft}</b>`;
+                            } else if (eventType.toLowerCase() === 'exam day') {
+                                const dangerColor = getDangerZoneColor(daysLeft, totalDays);
+                                content += `<b style="color: ${dangerColor}">${daysLeft}</b>`;
+                            } else {
+                                content += `<b>${daysLeft}</b>`;
+                            }
+                        } else if (daysLeft === 0) {
+                            content = `<span class="date">${month} ${day}</span><br><b>${eventType.toUpperCase()}</b>`;
+                        } else {
+                            content += '-';
+                        }
+                        td.innerHTML = content;
+                        if (current.getDay() === 0 || current.getDay() === 6) {
+                            td.classList.add('weekend');
+                        }
+                        if (current.toDateString() === todayDate.toDateString()) {
+                            td.classList.add('today');
+                        }
+                        if (daysLeft === 0) {
+                            td.classList.add('event');
+                        }
+                    }
+                    daysTr.appendChild(td);
+                    current.setDate(current.getDate() + 1);
+                }
+                tbody.appendChild(daysTr);
+                weekNum--;
+                weekStart.setDate(weekStart.getDate() + 7);
+            }
+
+            calendarTable.style.display = 'table';
+            printButton.style.display = 'inline-block';
+            pdfButton.style.display = 'inline-block';
+            jpgButton.style.display = 'inline-block';
+        }
+
+        function printCalendar() {
+            window.print();
+        }
+
+        function downloadPDF() {
+            errorMessage.style.display = 'none';
+            errorMessage.textContent = '';
+
+            const tempContainer = document.createElement('div');
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.width = '1200px'; // Increased width for 4K compatibility
+            const creatorName = document.getElementById('creatorName').value.trim() || 'Anonymous';
+            tempContainer.innerHTML = `<h2 style="text-align: center; font-size: 28px; margin-bottom: 15px;">${titleElement.textContent}</h2><div style="position: relative; min-height: 800px;"><div style="position: absolute; top: 15px; right: 30px; font-size: 18px; color: #444; font-weight: bold;">Created by: ${creatorName}</div><table style="width: 100%;">${calendarTable.innerHTML}</table></div>`;
+            document.body.appendChild(tempContainer);
+
+            html2canvas(tempContainer, { 
+                scale: 4, // Increased scale for 4K quality
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png', 1.0); // High quality
+                const { jsPDF } = window.jspdf;
+                if (!jsPDF) {
+                    console.error('jsPDF is not loaded correctly.');
+                    errorMessage.textContent = 'Failed to load PDF library. Please refresh and try again.';
+                    errorMessage.style.display = 'block';
+                    document.body.removeChild(tempContainer);
+                    return;
+                }
+
+                const margin = 28.35; // 1 cm in points
+                const pdfWidth = canvas.width / 4; // Adjust for scale
+                const pdfHeight = canvas.height / 4; // Adjust for scale
+                const pdf = new jsPDF({
+                    orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+                    unit: 'pt',
+                    format: [pdfWidth + 2 * margin, pdfHeight + 2 * margin]
+                });
+
+                pdf.addImage(imgData, 'PNG', margin, margin, pdfWidth, pdfHeight);
+
+                const eventType = (document.getElementById('eventType').value === 'Custom' && document.getElementById('customEvent').value.trim()) || document.getElementById('eventType').value;
+                const eventDate = document.getElementById('eventDate').value || 'event';
+                pdf.save(`${eventType.toLowerCase().replace(/\s+/g, '_')}_calendar_${eventDate}.pdf`);
+
+                document.body.removeChild(tempContainer);
+            }).catch(error => {
+                console.error('Error generating PDF:', error);
+                errorMessage.textContent = 'Failed to generate PDF. Please check console for details and try again.';
+                errorMessage.style.display = 'block';
+                document.body.removeChild(tempContainer);
+            });
+        }
+
+        function downloadJPG() {
+            errorMessage.style.display = 'none';
+            errorMessage.textContent = '';
+
+            const tempContainer = document.createElement('div');
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.width = '1200px'; // Increased width for 4K compatibility
+            const creatorName = document.getElementById('creatorName').value.trim() || 'Anonymous';
+            tempContainer.innerHTML = `<h2 style="text-align: center; font-size: 28px; margin-bottom: 15px;">${titleElement.textContent}</h2><div style="position: relative; min-height: 800px;"><div style="position: absolute; top: 15px; right: 30px; font-size: 18px; color: #444; font-weight: bold;">Created by: ${creatorName}</div><table style="width: 100%;">${calendarTable.innerHTML}</table></div>`;
+            document.body.appendChild(tempContainer);
+
+            html2canvas(tempContainer, { 
+                scale: 4, // Increased scale for 4K quality
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            }).then(canvas => {
+                const margin = 28.35; // 1 cm in pixels
+                const scaledCanvas = document.createElement('canvas');
+                scaledCanvas.width = canvas.width + 2 * margin;
+                scaledCanvas.height = canvas.height + 2 * margin;
+                const ctx = scaledCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
+                ctx.drawImage(canvas, margin, margin);
+
+                const link = document.createElement('a');
+                link.download = `${(document.getElementById('eventType').value === 'Custom' && document.getElementById('customEvent').value.trim()) || document.getElementById('eventType').value.toLowerCase().replace(/\s+/g, '_')}_calendar_${document.getElementById('eventDate').value || 'event'}.jpg`;
+                link.href = scaledCanvas.toDataURL('image/jpeg', 1.0); // High quality
+                link.click();
+
+                document.body.removeChild(tempContainer);
+            }).catch(error => {
+                console.error('Error generating JPG:', error);
+                errorMessage.textContent = 'Failed to generate JPG. Please check console for details and try again.';
+                errorMessage.style.display = 'block';
+                document.body.removeChild(tempContainer);
+            });
+        }
+    </script>
+</body>
+</html>
